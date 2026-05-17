@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BriefBuddy - Meetings</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+    nav { margin-bottom: 24px; }
+    nav a { margin-right: 16px; color: #059669; text-decoration: none; font-weight: bold; }
+    .meeting { border: 1px solid #D1FAE5; border-radius: 8px; padding: 16px; margin: 12px 0; }
+    .meeting h3 { margin: 0 0 6px 0; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; margin-left: 8px; }
+    .done { background: #D1FAE5; color: #065F46; }
+    .processing { background: #FEF3C7; color: #92400E; }
+    .failed { background: #FEE2E2; color: #991B1B; }
+    .overview { color: #374151; margin: 8px 0; }
+    .meta { font-size: 13px; color: #6B7280; }
+    details { margin-top: 10px; }
+    summary { cursor: pointer; color: #059669; font-weight: bold; }
+    .action-item { background: #F0FDF4; padding: 8px; border-radius: 6px; margin: 4px 0; font-size: 14px; }
+    a.view-link { color: #059669; font-size: 14px; }
+    #error { color: red; padding: 12px; background: #FEE2E2; border-radius: 6px; display: none; }
+  </style>
+</head>
+<body>
+  <h1>My Meetings</h1>
+  <nav>
+    <a href="index.html">Upload New</a>
+    <a href="chat.html">Ask a Question</a>
+  </nav>
+
+  <div id="error"></div>
+  <div id="list">Loading...</div>
+
+  <script>
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      document.getElementById('list').innerHTML =
+        '<p>No token found. <a href="index.html">Go set your token first.</a></p>';
+    } else {
+      loadMeetings();
+    }
+
+    async function loadMeetings() {
+      try {
+        const res = await fetch('/api/meetings', {
+          headers: { 'x-token': token }
+        });
+
+        if (res.status === 401) {
+          document.getElementById('list').innerHTML =
+            '<p>Invalid token. <a href="index.html">Update your token.</a></p>';
+          return;
+        }
+
+        const meetings = await res.json();
+
+        if (meetings.length === 0) {
+          document.getElementById('list').innerHTML =
+            '<p>No meetings yet. <a href="index.html">Upload one.</a></p>';
+          return;
+        }
+
+        document.getElementById('list').innerHTML = meetings.map(m => `
+          <div class="meeting">
+            <h3>
+              ${m.title}
+              <span class="badge ${m.status}">${m.status}</span>
+            </h3>
+            <div class="meta">${new Date(m.created_at).toLocaleString()}</div>
+            ${m.overview
+              ? `<p class="overview">${m.overview}</p>`
+              : '<p class="meta">Processing...</p>'
+            }
+            ${m.status === 'done'
+              ? `<a class="view-link" href="meetings.html?id=${m.id}">View full summary & transcript →</a>`
+              : ''
+            }
+          </div>
+        `).join('');
+
+      } catch (err) {
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = 'Failed to load: ' + err.message;
+        document.getElementById('list').innerHTML = '';
+      }
+    }
+
+    // Auto-refresh every 10 seconds if any meeting is still processing
+    setInterval(async () => {
+      const cards = document.querySelectorAll('.badge.processing');
+      if (cards.length > 0) loadMeetings();
+    }, 10000);
+  </script>
+</body>
+</html>

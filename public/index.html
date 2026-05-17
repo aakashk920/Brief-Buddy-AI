@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BriefBuddy Local</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+    input, button { padding: 10px; margin: 8px 0; width: 100%; font-size: 16px; box-sizing: border-box; }
+    button { background: #059669; color: white; border: none; cursor: pointer; border-radius: 6px; }
+    button:disabled { background: #9CA3AF; cursor: not-allowed; }
+    #status { padding: 12px; background: #F0FDF4; border-radius: 6px; display: none; margin-top: 10px; }
+    #token-display { font-size: 13px; color: #6B7280; margin: 4px 0; }
+    nav { margin-top: 20px; }
+    nav a { margin-right: 16px; color: #059669; }
+  </style>
+</head>
+<body>
+  <h1>BriefBuddy</h1>
+
+  <!-- Token setup -->
+  <div>
+    <input id="token-input" placeholder="Enter your token (e.g. token123)" />
+    <button onclick="saveToken()">Save Token</button>
+    <div id="token-display"></div>
+  </div>
+
+  <hr/>
+
+  <!-- Upload form -->
+  <input id="title" placeholder="Meeting title" />
+  <input type="file" id="audio" accept="audio/*,video/*" />
+  <button id="upload-btn" onclick="upload()">Upload & Process</button>
+  <div id="status"></div>
+
+  <nav>
+    <a href="meetings.html">View all meetings</a>
+    <a href="chat.html">Ask a question</a>
+  </nav>
+
+  <script>
+    // Show saved token on load
+    const saved = localStorage.getItem('token');
+    if (saved) {
+      document.getElementById('token-display').textContent = 'Token saved: ' + saved;
+      document.getElementById('token-input').value = saved;
+    }
+
+    function saveToken() {
+      const t = document.getElementById('token-input').value.trim();
+      if (!t) return alert('Enter a token first');
+      localStorage.setItem('token', t);
+      document.getElementById('token-display').textContent = 'Token saved: ' + t;
+      alert('Token saved!');
+    }
+
+    async function upload() {
+
+      const token = 'token123';
+      if (!token) return alert('Save your token first');
+
+      const title = document.getElementById('title').value.trim() || 'Untitled Meeting';
+      const fileInput = document.getElementById('audio');
+      const file = fileInput.files[0];
+      if (!file) return alert('Pick an audio file first');
+
+      const btn = document.getElementById('upload-btn');
+      const st  = document.getElementById('status');
+
+      btn.disabled = true;
+      st.style.display = 'block';
+      st.textContent = 'Uploading...';
+
+      try {
+        // 1. Upload the file
+        const fd = new FormData();
+        fd.append('audio', file);
+        fd.append('title', title);
+
+        const uploadRes = await fetch('/api/meetings', {
+          method: 'POST',
+          headers: { 'x-token': token },  // no Content-Type — multer needs multipart
+          body: fd
+        });
+
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json();
+          throw new Error(err.error || 'Upload failed');
+        }
+
+        const data = await uploadRes.json();
+        const meetingId = data.id;  // <-- this was undefined before
+
+        if (!meetingId) throw new Error('Server did not return a meeting ID');
+
+        st.textContent = `Uploaded! Processing meeting #${meetingId}... (takes 1-3 min per hour of audio)`;
+
+        // 2. Poll for completion — send token in every request
+        const interval = setInterval(async () => {
+          try {
+            const pollRes = await fetch(`/api/meetings/${meetingId}/status`, {
+              headers: { 'x-token': token }  // <-- this was missing before
+            });
+
+            if (!pollRes.ok) {
+              clearInterval(interval);
+              st.textContent = 'Auth error while polling — check your token';
+              btn.disabled = false;
+              return;
+            }
+
+            const { status } = await pollRes.json();
+
+            if (status === 'done') {
+              clearInterval(interval);
+              st.innerHTML = `Done! <a href="meetings.html">View summary →</a>`;
+              btn.disabled = false;
+            } else if (status === 'failed') {
+              clearInterval(interval);
+              st.textContent = 'Processing failed — check server logs for details';
+              btn.disabled = false;
+            } else {
+              st.textContent = `Still processing... (status: ${status})`;
+            }
+          } catch (pollErr) {
+            clearInterval(interval);
+            st.textContent = 'Polling error: ' + pollErr.message;
+            btn.disabled = false;
+          }
+        }, 5000);
+
+      } catch (err) {
+        st.textContent = 'Error: ' + err.message;
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
