@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// ── Simple token auth middleware ──
+// ── Simple token auth middlewareerem!
 const TOKENS = {};
 (process.env.LOCAL_TOKENS || '').split(',').forEach(pair => {
   const [name, token] = pair.trim().split(':');
