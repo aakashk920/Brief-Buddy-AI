@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// ── Simple token auth middleware ── this is just for demo purposes. In production, use a proper auth system!
+// ── Simple token auth middlewareerem!
 const TOKENS = {};
 (process.env.LOCAL_TOKENS || '').split(',').forEach(pair => {
   const [name, token] = pair.trim().split(':');
